@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SkinMirror — dari selfie jadi rutinitas + preview hasil</title>
+<style>
+  :root{--ink:#1d2433;--mut:#667085;--acc:#7c4dff;--bg:#f7f5ff;--card:#fff;--line:#e6e1f5}
+  *{box-sizing:border-box} body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:var(--ink);background:var(--bg)}
+  header{padding:28px 20px 8px;max-width:900px;margin:auto} h1{margin:0 0 6px;font-size:30px} p.sub{color:var(--mut);margin:0 0 4px}
+  main{max-width:900px;margin:auto;padding:16px 20px 48px} .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:20px;margin:14px 0}
+  button{border:0;border-radius:999px;padding:11px 20px;font-weight:700;cursor:pointer;background:var(--acc);color:#fff}
+  button.ghost{background:#efeaff;color:#4a3aa8} button:disabled{opacity:.5}
+  input[type=file]{margin:10px 0} .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
+  .photo-wrap{position:relative;display:inline-block;max-width:100%} .photo-wrap img.selfie{display:block;max-width:420px;width:100%;border-radius:12px}
+  .photo-wrap img.mask{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:12px;opacity:.75;pointer-events:none}
+  .gauge{font-size:52px;font-weight:800} .bar{height:10px;background:#eee;border-radius:99px;overflow:hidden} .bar i{display:block;height:100%;background:linear-gradient(90deg,#ffb020,#7c4dff)}
+  .concern{display:grid;grid-template-columns:1fr auto;gap:4px 12px;padding:10px 0;border-bottom:1px solid #f0edf9}
+  .concern b{font-size:15px} .concern span{color:var(--mut);font-size:13px} .score{font-weight:800;font-size:20px}
+  .tag{display:inline-block;background:#fff3cd;border-radius:99px;padding:2px 10px;font-size:12px;font-weight:700}
+  .step h3{margin:14px 0 4px} .step p{margin:0 0 10px;color:#3d4356} textarea{width:100%;min-height:170px;border:1px solid var(--line);border-radius:12px;padding:12px;font:14px/1.5 system-ui}
+  .slider-wrap{position:relative;max-width:420px} .slider-wrap img{width:100%;display:block;border-radius:12px}
+  .slider-wrap .after{position:absolute;inset:0;overflow:hidden} .slider-wrap .after img{width:420px;max-width:420px}
+  .small{color:var(--mut);font-size:13px} .err{color:#b42318;font-weight:600} .ok{color:#067647;font-weight:600}
+  input[type=range]{width:100%} label{font-weight:600}
+</style>
+</head>
+<body>
+<header>
+  <h1>🪞 SkinMirror</h1>
+  <p class="sub">Satu selfie → analisis kulit YouCam Skin AI → rutinitas pagi &amp; malam yang personal → preview makeup try-on.</p>
+  <p class="small">Dibuat untuk YouCam API Skin AI &amp; eCommerce VTO Hackathon. Foto tidak disimpan: diproses di memori server selama satu analisis, lalu dibuang. Ini bukan diagnosis medis.</p>
+</header>
+<main>
+  <section class="card">
+    <h2 style="margin-top:0">1 · Upload selfie</h2>
+    <p class="small">Tips foto: cahaya rata, wajah menghadap kamera, tanpa makeup berat. Format JPG/PNG, maks 10 MB.</p>
+    <input type="file" id="file" accept="image/png,image/jpeg">
+    <div class="row">
+      <button id="analyzeBtn">Analisis kulit saya</button>
+      <button class="ghost" id="sampleBtn">Coba wajah contoh (tanpa unit)</button>
+    </div>
+    <p id="status" class="small"></p>
+    <div id="preview"></div>
+  </section>
+
+  <section class="card" id="resultCard" hidden>
+    <h2 style="margin-top:0">2 · Hasil analisis <span id="srcTag"></span></h2>
+    <div class="row">
+      <div><div class="small">Skor kulit keseluruhan</div><div class="gauge" id="overall">–</div></div>
+      <div class="photo-wrap" id="photoWrap"></div>
+    </div>
+    <p class="small">Pilih satu concern untuk melihat mask deteksinya di atas foto (bila tersedia dari YouCam).</p>
+    <div id="concerns"></div>
+  </section>
+
+  <section class="card" id="routineCard" hidden>
+    <h2 style="margin-top:0">3 · Rutinitas personalmu</h2>
+    <p class="small">Disusun otomatis dari 3 concern terendahmu — bukan karangan: setiap langkah menyebut skor yang mendasarinya.</p>
+    <div class="step"><h3>☀️ Pagi (AM)</h3><div id="am"></div></div>
+    <div class="step"><h3>🌙 Malam (PM)</h3><div id="pm"></div></div>
+    <h3>Salin rutinitas</h3>
+    <textarea id="routineText" readonly></textarea>
+    <div class="row"><button class="ghost" id="copyBtn">Salin teks</button></div>
+  </section>
+
+  <section class="card" id="vtoCard" hidden>
+    <h2 style="margin-top:0">4 · Preview hasil (Makeup VTO)</h2>
+    <p class="small">Try-on lipstik + blush dari YouCam Makeup VTO pada selfie yang sama. Geser untuk membandingkan sebelum/sesudah.</p>
+    <div class="row">
+      <label><input type="radio" name="preset" value="natural" checked> Natural</label>
+      <label><input type="radio" name="preset" value="bold"> Bold</label>
+      <button id="vtoBtn">Buat preview VTO</button>
+    </div>
+    <p id="vtoStatus" class="small"></p>
+    <div id="vtoWrap"></div>
+  </section>
+</main>
+<script>
+const LABEL = {acne:'Jerawat (acne)',wrinkle:'Kerutan (wrinkle)',texture:'Tekstur (texture)',moisture:'Kelembapan (moisture)',oiliness:'Minyak (oiliness)',pore:'Pori (pore)',redness:'Kemerahan (redness)',radiance:'Cahaya kulit (radiance)',dark_circle:'Lingkar hitam',firmness:'Kekencangan',age_spot:'Flek / age spot',skin_age:'Usia kulit'};
+const $ = (id) => document.getElementById(id);
+let selfieDataUrl = null, lastResult = null, lastConcerns = [];
+
+function setStatus(t, cls){ const el=$('status'); el.textContent=t; el.className='small '+ (cls||''); }
+
+function showResult(r){
+  lastResult = r; lastConcerns = r.concerns || [];
+  $('resultCard').hidden = false; $('routineCard').hidden = false; $('vtoCard').hidden = false;
+  $('overall').textContent = (r.overall ?? '–') + (r.overall != null ? '/100' : '');
+  $('srcTag').textContent = r.source === 'youcam' ? '· live dari YouCam Skin AI' : '· MODE CONTOH (bukan hasil analisis fotomu)';
+  const wrap = $('photoWrap'); wrap.innerHTML = '';
+  if (selfieDataUrl){ const img = document.createElement('img'); img.className='selfie'; img.src = selfieDataUrl; wrap.appendChild(img); }
+  const box = $('concerns'); box.innerHTML = '';
+  const sorted = [...lastConcerns].sort((a,b)=>(a.ui_score??99)-(b.ui_score??99));
+  sorted.forEach((c,i)=>{
+    const d = document.createElement('div'); d.className='concern';
+    d.innerHTML = `<div><b>${LABEL[c.type]||c.type}</b> ${i<3?'<span class="tag">⚠ fokus utama</span>':''}<br><span>Skor UI ${c.ui_score ?? '–'} · skor mentah ${c.raw_score ?? '–'}</span><div class="bar"><i style="width:${c.ui_score||0}%"></i></div></div><div class="score">${c.ui_score ?? '–'}</div>`;
+    d.style.cursor = c.mask_url ? 'pointer' : 'default';
+    d.title = c.mask_url ? 'Klik untuk melihat mask di foto' : 'Tidak ada mask untuk concern ini';
+    d.onclick = () => { if(!c.mask_url) return; document.querySelectorAll('.photo-wrap img.mask').forEach(e=>e.remove()); const m=document.createElement('img'); m.className='mask'; m.src=c.mask_url; wrap.appendChild(m); };
+    box.appendChild(d);
+  });
+  buildRoutine(sorted);
+}
+
+function stepFor(c){
+  const s = c.ui_score ?? 100, name = LABEL[c.type]||c.type;
+  const map = {
+    moisture: [`Gunakan pelembap humektan (hyaluronic acid) + kunci dengan moisturizer — karena skor kelembapanmu ${s}/100`, `Hindari sabun yang membuat kulit terasa ketarik`],
+    acne: [`Pembersih lembut 2x sehari, jangan digosok keras — karena skor jerawatmu ${s}/100`, `Malam: BHA (salicylic acid) 2–3x seminggu, mulai dari frekuensi rendah`],
+    redness: [`Prioritaskan produk penenang (centella / panthenol) — karena skor kemerahanmu ${s}/100`, `Tunda eksfoliasi keras sampai kemerahan mereda`],
+    oiliness: [`Gunakan pelembap ringan gel (bukan krim berat) — karena skor minyakmu ${s}/100`, `Blotting paper di siang hari, jangan over-cleansing`],
+    pore: [`Eksfoliasi lembut + niacinamide — karena skor porimu ${s}/100`],
+    texture: [`Eksfoliasi kimia ringan berkala + hidrasi — karena skor teksturmu ${s}/100`],
+    wrinkle: [`Retinoid malam bertahap + tabir surya pagi — karena skor kerutanmu ${s}/100`],
+  };
+  return map[c.type] || [`Fokus perawatan pada ${name} — karena skormu ${s}/100`];
+}
+
+function buildRoutine(sorted){
+  const worst = sorted.slice(0,3);
+  const am = ['Pembersih lembut', 'Pelembap sesuai jenis kulit', 'Tabir surya SPF 30+ (wajib pagi)'];
+  const pm = ['Pembersih lembut (double cleanse bila memakai makeup/tabir surya)', 'Perawatan aktif sesuai fokus', 'Pelembap malam'];
+  worst.forEach(c=>{ am.push(...stepFor(c).slice(0,1)); pm.push(...stepFor(c).slice(1)); });
+  $('am').innerHTML = am.map((t,i)=>`<p>${i+1}. ${t}</p>`).join('');
+  $('pm').innerHTML = pm.map((t,i)=>`<p>${i+1}. ${t}</p>`).join('');
+  const focus = worst.map(c=>`${LABEL[c.type]||c.type} (${c.ui_score}/100)`).join(', ');
+  $('routineText').value = `RUTINITAS KULIT SAYA (SkinMirror)\nSkor keseluruhan: ${lastResult.overall}/100\nFokus utama: ${focus}\n\nPAGI:\n${am.map((t,i)=>`${i+1}. ${t}`).join('\n')}\n\nMALAM:\n${pm.map((t,i)=>`${i+1}. ${t}`).join('\n')}\n\nCatatan: hasil AI, bukan diagnosis medis. Bila keluhan menetap, konsultasikan ke dokter kulit.`;
+}
+
+$('file').onchange = (e)=>{
+  const f = e.target.files[0]; if(!f) return;
+  const rd = new FileReader();
+  rd.onload = ()=>{ selfieDataUrl = rd.result; $('preview').innerHTML = `<img src="${selfieDataUrl}" style="max-width:320px;border-radius:12px">`; setStatus('Foto siap. Klik "Analisis kulit saya".','ok'); };
+  rd.readAsDataURL(f);
+};
+
+async function callApi(path, body){
+  const r = await fetch(path, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+  const j = await r.json();
+  if(!r.ok || j.error) throw new Error(j.error || ('HTTP '+r.status));
+  return j;
+}
+
+$('analyzeBtn').onclick = async ()=>{
+  if(!selfieDataUrl){ setStatus('Pilih foto dulu, atau pakai "Coba wajah contoh".','err'); return; }
+  setStatus('Mengunggah & menganalisis via YouCam Skin AI… (file → task → polling, bisa ±30–90 detik)'); $('analyzeBtn').disabled = true;
+  try { const r = await callApi('/api/analyze', {image: selfieDataUrl}); showResult(r); setStatus(r.note ? r.note : 'Analisis selesai.','ok'); }
+  catch(e){ setStatus('Gagal: '+e.message+' — coba lagi, atau pakai mode contoh.','err'); }
+  $('analyzeBtn').disabled = false;
+};
+
+$('sampleBtn').onclick = async ()=>{
+  setStatus('Memuat hasil contoh…');
+  try {
+    const r = await fetch('/sample-result.json').then(x=>x.json());
+    selfieDataUrl = 'data:image/svg+xml;utf8,' + encodeURIComponent(document.querySelector('#sampleSvg') ? '' : '');
+    // Wajah contoh digambar sebagai ilustrasi SVG di bawah (bukan foto orang).
+    selfieDataUrl = SAMPLE_FACE;
+    showResult(r); setStatus('Mode contoh aktif — tidak memakai unit YouCam.','ok');
+  } catch(e){ setStatus('Gagal memuat contoh: '+e.message,'err'); }
+};
+
+const SAMPLE_FACE = 'data:image/svg+xml;utf8,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="480" height="600" viewBox="0 0 480 600"><rect width="480" height="600" fill="#f6e3d3"/><ellipse cx="240" cy="280" rx="130" ry="160" fill="#f2c9a4"/><ellipse cx="195" cy="260" rx="14" ry="10" fill="#2b2b2b"/><ellipse cx="285" cy="260" rx="14" ry="10" fill="#2b2b2b"/><path d="M200 225 Q240 210 280 225" stroke="#6b4a2f" stroke-width="8" fill="none" stroke-linecap="round"/><path d="M240 270 L235 320 Q240 330 250 320" stroke="#c98a5e" stroke-width="6" fill="none" stroke-linecap="round"/><path d="M205 380 Q240 405 275 380" stroke="#b85c5c" stroke-width="10" fill="none" stroke-linecap="round"/><path d="M110 280 Q90 120 240 80 Q390 120 370 280 Q390 200 360 120 Q240 40 120 120 Q90 200 110 280" fill="#3d2b1f"/></svg>`);
+
+$('copyBtn').onclick = async ()=>{ try{ await navigator.clipboard.writeText($('routineText').value); setStatus('Rutinitas disalin.','ok'); }catch{ $('routineText').select(); document.execCommand('copy'); } };
+
+$('vtoBtn').onclick = async ()=>{
+  if(!selfieDataUrl || selfieDataUrl.startsWith('data:image/svg')){ $('vtoStatus').textContent = 'VTO butuh foto asli (bukan wajah contoh). Upload selfie dulu.'; $('vtoStatus').className='small err'; return; }
+  const preset = document.querySelector('input[name=preset]:checked').value;
+  $('vtoStatus').textContent = 'Membuat preview Makeup VTO… (±30–90 detik)'; $('vtoBtn').disabled = true;
+  try {
+    const r = await callApi('/api/vto', {image: selfieDataUrl, preset});
+    $('vtoWrap').innerHTML = `<div class="slider-wrap"><img src="${selfieDataUrl}"><div class="after" id="afterBox" style="width:50%"><img src="${r.vto_url}"></div></div><input type="range" id="cmp" min="0" max="100" value="50"><p class="small">Geser: kiri = sebelum, kanan = sesudah (hasil YouCam Makeup VTO).</p>`;
+    $('cmp').oninput = (e)=>{ $('afterBox').style.width = e.target.value + '%'; };
+    $('vtoStatus').textContent = 'Preview VTO selesai.'; $('vtoStatus').className='small ok';
+  } catch(e){ $('vtoStatus').textContent = 'VTO gagal: '+e.message; $('vtoStatus').className='small err'; }
+  $('vtoBtn').disabled = false;
+};
+</script>
+</body>
+</html>
