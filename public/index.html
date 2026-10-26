@@ -154,8 +154,7 @@ $('sampleBtn').onclick = async ()=>{
   setStatus('Memuat hasil contoh…');
   try {
     const r = await fetch('/sample-result.json').then(x=>x.json());
-    selfieDataUrl = 'data:image/svg+xml;utf8,' + encodeURIComponent(document.querySelector('#sampleSvg') ? '' : '');
-    // Wajah contoh digambar sebagai ilustrasi SVG di bawah (bukan foto orang).
+    // Wajah contoh = ilustrasi SVG (bukan foto orang), supaya jelas ini mode contoh.
     selfieDataUrl = SAMPLE_FACE;
     showResult(r); setStatus('Mode contoh aktif — tidak memakai unit YouCam.','ok');
   } catch(e){ setStatus('Gagal memuat contoh: '+e.message,'err'); }
