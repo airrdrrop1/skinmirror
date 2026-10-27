@@ -110,14 +110,19 @@ async function pollTask(feature, taskId, timeoutMs = 90000) {
 
 function normalizeSkinResult(data) {
   const out = (data.results && data.results.output) || [];
-  const concerns = out.map((o) => ({
-    type: o.type,
-    ui_score: o.ui_score,
-    raw_score: o.raw_score,
-    mask_url: (o.mask_urls && o.mask_urls[0]) || null,
-  }));
+  // YouCam also returns unscored outputs (all, skin_age, resize_image) with
+  // no ui_score: averaging them as 0 dragged the live overall from 79 to 55.
+  // Only scored concerns count toward the overall and the UI cards.
+  const concerns = out
+    .filter((o) => typeof o.ui_score === 'number')
+    .map((o) => ({
+      type: o.type,
+      ui_score: o.ui_score,
+      raw_score: o.raw_score,
+      mask_url: (o.mask_urls && o.mask_urls[0]) || null,
+    }));
   const overall = concerns.length
-    ? Math.round(concerns.reduce((s, c) => s + (c.ui_score || 0), 0) / concerns.length)
+    ? Math.round(concerns.reduce((s, c) => s + c.ui_score, 0) / concerns.length)
     : null;
   return { source: 'youcam', overall, concerns };
 }

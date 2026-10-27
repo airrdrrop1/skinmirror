@@ -170,7 +170,7 @@ $('vtoBtn').onclick = async ()=>{
   $('vtoStatus').textContent = 'Membuat preview Makeup VTO… (±30–90 detik)'; $('vtoBtn').disabled = true;
   try {
     const r = await callApi('/api/vto', {image: selfieDataUrl, preset});
-    $('vtoWrap').innerHTML = `<div class="slider-wrap"><img src="${selfieDataUrl}"><div class="after" id="afterBox" style="width:50%"><img src="${r.vto_url}"></div></div><input type="range" id="cmp" min="0" max="100" value="50"><p class="small">Geser: kiri = sebelum, kanan = sesudah (hasil YouCam Makeup VTO).</p>`;
+    $('vtoWrap').innerHTML = `<div class="slider-wrap"><img src="${selfieDataUrl}"><div class="after" id="afterBox" style="width:50%"><img src="${r.vto_url}"></div></div><input type="range" id="cmp" min="0" max="100" value="50"><p class="small">Geser: bagian yang tertutup = sesudah (hasil YouCam Makeup VTO), sisanya = sebelum.</p>`;
     $('cmp').oninput = (e)=>{ $('afterBox').style.width = e.target.value + '%'; };
     $('vtoStatus').textContent = 'Preview VTO selesai.'; $('vtoStatus').className='small ok';
   } catch(e){ $('vtoStatus').textContent = 'VTO gagal: '+e.message; $('vtoStatus').className='small err'; }
